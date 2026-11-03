@@ -38,16 +38,24 @@ public class MainActivity extends Activity {
     @Override protected void onWindowVisibilityChanged(int visibility){super.onWindowVisibilityChanged(visibility);if(visibility!=VISIBLE)buzz(false);}
     @Override protected void onDetachedFromWindow(){buzz(false);if(buzz!=null){buzz.release();buzz=null;}super.onDetachedFromWindow();}
     void hit(){if(immortal)return;dead=true;buzz(false);sound(ToneGenerator.TONE_PROP_NACK);}
-    // Bands retain the painted courtyard: distant skyline, garden and walkable paving.
+    BitmapShader skyShader,gardenShader,pathShader;
+    void layer(Canvas c,BitmapShader shader,float width,float height,float top,float bottom,float offset){
+      Matrix matrix=new Matrix();matrix.setScale(width,height);matrix.postTranslate(-offset,0);shader.setLocalMatrix(matrix);p.setShader(shader);c.drawRect(0,top,getWidth(),bottom,p);p.setShader(null);
+    }
+    // Full independent artwork with transparent foliage, never slices of a scene.
     void drawScenery(Canvas c,int w,int h,float scale){
       p.setColor(Color.WHITE);p.setAlpha(255);p.setFilterBitmap(true);
-      float tile=Math.max(w,h*bg.getWidth()/(float)bg.getHeight());
-      float[] top={0,.43f,.71f};float[] bottom={.43f,.71f,1};float[] speed={.18f,.48f,1};
-      for(int layer=0;layer<3;layer++){
-        c.save();c.clipRect(0,h*top[layer],w,h*bottom[layer]);float offset=-(cam*scale*speed[layer])%tile;
-        for(float start=offset-tile;start<w;start+=tile){c.drawBitmap(bg,null,new RectF(start,0,start+tile,h),p);}
-        c.restore();
+      if(skyShader==null){
+        Bitmap sky=BitmapFactory.decodeResource(getResources(),R.drawable.sky_layer),garden=BitmapFactory.decodeResource(getResources(),R.drawable.garden_layer),path=BitmapFactory.decodeResource(getResources(),R.drawable.path_layer);
+        skyShader=new BitmapShader(sky,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);gardenShader=new BitmapShader(garden,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);pathShader=new BitmapShader(path,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);
       }
+      // Mirrored repeat guarantees identical boundary pixels, even at different speeds.
+      float factor=h/724f;
+      layer(c,skyShader,factor*1.2f,factor*.96f,0,h,cam*scale*.15f);
+      layer(c,pathShader,factor*.9f,factor*.70f,h*.64f,h,cam*scale);
+      layer(c,gardenShader,factor,factor*.73f,0,h*.73f,cam*scale*.48f);
+      // Soft contact shade where the planted wall meets the paving.
+      p.setShader(new LinearGradient(0,h*.725f,0,h*.755f,Color.argb(65,65,79,40),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawRect(0,h*.725f,w,h*.755f,p);p.setShader(null);
     }
     void drawLeaves(Canvas c,int w,int h,float scale){
       float time=(System.nanoTime()/1000000L%600000)/1000f;
@@ -128,4 +136,3 @@ public class MainActivity extends Activity {
     }
   }
 }
-
