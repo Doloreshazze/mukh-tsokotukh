@@ -38,22 +38,24 @@ public class MainActivity extends Activity {
     @Override protected void onWindowVisibilityChanged(int visibility){super.onWindowVisibilityChanged(visibility);if(visibility!=VISIBLE)buzz(false);}
     @Override protected void onDetachedFromWindow(){buzz(false);if(buzz!=null){buzz.release();buzz=null;}super.onDetachedFromWindow();}
     void hit(){if(immortal)return;dead=true;buzz(false);sound(ToneGenerator.TONE_PROP_NACK);}
-    BitmapShader skyShader,gardenShader,pathShader;
-    void layer(Canvas c,BitmapShader shader,float width,float height,float top,float bottom,float offset){
-      Matrix matrix=new Matrix();matrix.setScale(width,height);matrix.postTranslate(-offset,0);shader.setLocalMatrix(matrix);p.setShader(shader);c.drawRect(0,top,getWidth(),bottom,p);p.setShader(null);
+    BitmapShader skyShader,gardenShader,pathShader;Bitmap skyImage,gardenImage,pathImage;
+    void layer(Canvas c,BitmapShader shader,Bitmap image,float top,float bottom,float offset){
+      // Scale from the actual decoded pixels, including Android resource density.
+      float sy=(bottom-top)/image.getHeight();float sx=Math.max(sy,getWidth()/(float)image.getWidth());
+      Matrix matrix=new Matrix();matrix.setScale(sx,sy);matrix.postTranslate(-offset,top);shader.setLocalMatrix(matrix);p.setShader(shader);c.drawRect(0,top,getWidth(),bottom,p);p.setShader(null);
     }
     // Full independent artwork with transparent foliage, never slices of a scene.
     void drawScenery(Canvas c,int w,int h,float scale){
       p.setColor(Color.WHITE);p.setAlpha(255);p.setFilterBitmap(true);
       if(skyShader==null){
-        Bitmap sky=BitmapFactory.decodeResource(getResources(),R.drawable.sky_layer),garden=BitmapFactory.decodeResource(getResources(),R.drawable.garden_layer),path=BitmapFactory.decodeResource(getResources(),R.drawable.path_layer);
-        skyShader=new BitmapShader(sky,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);gardenShader=new BitmapShader(garden,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);pathShader=new BitmapShader(path,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);
+        BitmapFactory.Options options=new BitmapFactory.Options();options.inScaled=false;
+        skyImage=BitmapFactory.decodeResource(getResources(),R.drawable.sky_layer,options);gardenImage=BitmapFactory.decodeResource(getResources(),R.drawable.garden_layer,options);pathImage=BitmapFactory.decodeResource(getResources(),R.drawable.path_layer,options);
+        skyShader=new BitmapShader(skyImage,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);gardenShader=new BitmapShader(gardenImage,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);pathShader=new BitmapShader(pathImage,Shader.TileMode.MIRROR,Shader.TileMode.CLAMP);
       }
       // Mirrored repeat guarantees identical boundary pixels, even at different speeds.
-      float factor=h/724f;
-      layer(c,skyShader,factor*1.2f,factor*.96f,0,h,cam*scale*.15f);
-      layer(c,pathShader,factor*.9f,factor*.70f,h*.64f,h,cam*scale);
-      layer(c,gardenShader,factor,factor*.73f,0,h*.73f,cam*scale*.48f);
+      layer(c,skyShader,skyImage,0,h*.73f,cam*scale*.15f);
+      layer(c,pathShader,pathImage,h*.64f,h,cam*scale);
+      layer(c,gardenShader,gardenImage,0,h*.73f,cam*scale*.48f);
       // Soft contact shade where the planted wall meets the paving.
       p.setShader(new LinearGradient(0,h*.725f,0,h*.755f,Color.argb(65,65,79,40),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawRect(0,h*.725f,w,h*.755f,p);p.setShader(null);
     }
@@ -136,3 +138,4 @@ public class MainActivity extends Activity {
     }
   }
 }
+
