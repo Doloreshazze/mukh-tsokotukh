@@ -7,17 +7,23 @@ public class MainActivity extends Activity {
   class GameView extends View {
     Paint p=new Paint(3); Bitmap bg; float x=160,y=350,vx=0,vy=0,cam=0; boolean left,right,jump,dead=false,won=false; int coins=0; long last=0; Random rnd=new Random(); ArrayList<Float> coinX=new ArrayList<>();
     float[] traps={620,1040,1510,2070}; float[] webs={820,1300,1810}; final float ground=405;
+    boolean immortal=false;float clock=0,idle=0;ArrayList<float[]> pickups=new ArrayList<>();
+    float strike(float a){return (clock+a*.003f)%2.8f;}
+    float spiderY(float a){return 195+210*(.5f+.5f*(float)Math.sin(clock*.9f+a));}
     GameView(){super(MainActivity.this); bg=BitmapFactory.decodeResource(getResources(),R.drawable.garden_background); for(int i=0;i<18;i++)coinX.add(340+i*108f); p.setTypeface(Typeface.create("sans",Typeface.BOLD)); setFocusable(true);}
     void sound(int tone){try{ToneGenerator t=new ToneGenerator(AudioManager.STREAM_MUSIC,45);t.startTone(tone,80); new Handler().postDelayed(t::release,110);}catch(Exception e){}}
     protected void onDraw(Canvas c){super.onDraw(c); long n=System.currentTimeMillis(); float dt=last==0?.016f:Math.min(.04f,(n-last)/1000f);last=n; int w=getWidth(),h=getHeight();
       if(!dead&&!won) update(dt);float scale=h/600f;cam=Math.max(0,x-w/scale*.35f);
       drawScenery(c,w,h,scale);
       c.save();c.translate(0,h*.80f-(ground+21)*scale);c.scale(scale,scale);c.translate(-cam,0);drawWorld(c,w,h);c.restore();
-      drawLeaves(c,w,h,scale);drawHud(c,w,h);if(!dead&&!won){postInvalidateOnAnimation();}
+      drawLeaves(c,w,h,scale);drawHud(c,w,h);p.setTextAlign(Paint.Align.RIGHT);p.setTextSize(24);p.setColor(immortal?Color.GREEN:Color.WHITE);c.drawText(immortal?"DEV: БЕССМЕРТИЕ ВКЛ":"DEV: БЕССМЕРТИЕ ВЫКЛ",w-24,40,p);if(!dead&&!won){postInvalidateOnAnimation();}
     }
     void update(float d){float speed=240; vx=left?-speed:right?speed:0; x+=vx*d; if(jump&&y>=ground-1){vy=-550;sound(ToneGenerator.TONE_PROP_BEEP2);} jump=false; vy+=1250*d; y+=vy*d; if(y>ground){y=ground;vy=0;} if(vy>0&&y<ground&&right){vy-=600*d;} // tiny flight while holding right in air
-      for(int i=coinX.size()-1;i>=0;i--)if(Math.abs((coinX.get(i)+18)-x)<35&&Math.abs(y-ground)<85){coinX.remove(i);coins++;sound(ToneGenerator.TONE_PROP_ACK);}
-      for(float t:traps)if(Math.abs(x-t)<35&&y>330)hit(); for(float t:webs)if(Math.abs(x-t)<32&&y>300)hit(); if(x>2250&&coins>=10)won=true;
+      clock+=d;idle=Math.abs(vx)<1&&y>=ground-1?idle+d:0;
+      for(int i=pickups.size()-1;i>=0;i--){pickups.get(i)[1]+=d;if(pickups.get(i)[1]>=.65f)pickups.remove(i);}
+      for(int i=coinX.size()-1;i>=0;i--)if(Math.abs(coinX.get(i)-x)<48&&Math.abs(y-ground)<40){pickups.add(new float[]{coinX.remove(i),0});coins++;sound(ToneGenerator.TONE_PROP_ACK);}
+      for(float t:traps)if(strike(t)>.95f&&strike(t)<1.25f&&Math.abs(x-t)<65&&y>280)hit();
+      for(float t:webs)if(Math.abs(x-t)<37&&spiderY(t)>y-145&&spiderY(t)<y+18)hit();if(x>2250&&coins>=10)won=true;
     }
     AudioTrack buzz; boolean buzzing=false;
     void buzz(boolean active){
@@ -31,7 +37,7 @@ public class MainActivity extends Activity {
     }
     @Override protected void onWindowVisibilityChanged(int visibility){super.onWindowVisibilityChanged(visibility);if(visibility!=VISIBLE)buzz(false);}
     @Override protected void onDetachedFromWindow(){buzz(false);if(buzz!=null){buzz.release();buzz=null;}super.onDetachedFromWindow();}
-    void hit(){dead=true;buzz(false);sound(ToneGenerator.TONE_PROP_NACK);}
+    void hit(){if(immortal)return;dead=true;buzz(false);sound(ToneGenerator.TONE_PROP_NACK);}
     // Bands retain the painted courtyard: distant skyline, garden and walkable paving.
     void drawScenery(Canvas c,int w,int h,float scale){
       p.setColor(Color.WHITE);p.setAlpha(255);p.setFilterBitmap(true);
@@ -58,11 +64,20 @@ public class MainActivity extends Activity {
       }
     }
     void drawWorld(Canvas c,int w,int h){p.setStyle(Paint.Style.FILL);
-      for(float q:coinX) coin(c,q,360); for(float t:traps) swatter(c,t,390); for(float t:webs) web(c,t,395); kiosk(c,2260,260); hero(c,x,y);
+      for(float q:coinX){p.setColor(Color.argb(65,50,40,20));c.drawOval(q-19,ground+12,q+19,ground+22,p);c.save();c.scale(1,.38f,q,ground+10);coin(c,q,ground+10);c.restore();}
+      for(float t:traps) swatter(c,t,390);for(float t:webs)web(c,t,165);kiosk(c,2260,260);hero(c,x,y);
+      for(float[] f:pickups){float u=Math.min(1,f[1]/.65f);float cx=f[0]+(x+29-f[0])*u;float cy=(ground+10)*(1-u)+(y-48)*u-100*(float)Math.sin(Math.PI*u);c.save();c.scale(1-u*.65f,1-u*.65f,cx,cy);coin(c,cx,cy);c.restore();}
     }
     void coin(Canvas c,float a,float b){p.setColor(Color.rgb(255,193,32));c.drawCircle(a,b,16,p);p.setColor(Color.WHITE);p.setTextSize(20);p.setTextAlign(Paint.Align.CENTER);c.drawText("₵",a,b+7,p);}
-    void web(Canvas c,float a,float b){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(Color.argb(210,245,250,255));for(int i=0;i<4;i++)c.drawCircle(a,b,i*13,p);c.drawLine(a-42,b,a+42,b,p);c.drawLine(a,b-42,a,b+12,p);p.setStyle(Paint.Style.FILL);}
-    void swatter(Canvas c,float a,float b){p.setColor(Color.rgb(115,74,42));c.rotate(-25,a,b);c.drawRoundRect(a-5,b-95,a+10,b,8,8,p);p.setColor(Color.rgb(236,88,75));c.drawRoundRect(a-37,b-135,a+42,b-85,15,15,p);p.setColor(Color.rgb(255,187,176));for(int i=-20;i<=20;i+=20)for(int j=-120;j<=-100;j+=15)c.drawCircle(a+i,b+j,4,p);c.rotate(25,a,b);}
+    void web(Canvas c,float a,float b){
+      p.setColor(Color.rgb(105,73,48));p.setStrokeWidth(11);c.drawLine(a-75,b-59,a+65,b-50,p);c.drawLine(a+40,b-53,a+75,b-78,p);
+      p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.4f);p.setColor(Color.argb(220,240,248,248));
+      for(int i=1;i<=4;i++)c.drawCircle(a,b,i*13,p);for(int i=0;i<8;i++){double angle=i*Math.PI/4;c.drawLine(a,b,a+52*(float)Math.cos(angle),b+52*(float)Math.sin(angle),p);}
+      float sy=spiderY(a);c.drawLine(a,b,a,sy,p);p.setColor(Color.rgb(62,45,69));p.setStrokeWidth(2.5f);
+      for(int i=0;i<4;i++){float dy=(i-1.5f)*5;float kick=(float)Math.sin(clock*7+i)*3;for(int side=-1;side<=1;side+=2){c.drawLine(a+side*5,sy+dy,a+side*17,sy+dy-6+kick,p);c.drawLine(a+side*17,sy+dy-6+kick,a+side*22,sy+dy+4,p);}}
+      p.setStyle(Paint.Style.FILL);c.drawOval(a-9,sy-12,a+9,sy+9,p);c.drawCircle(a,sy+7,7,p);p.setColor(Color.WHITE);c.drawCircle(a-3,sy+8,2,p);c.drawCircle(a+3,sy+8,2,p);
+    }
+    void swatter(Canvas c,float a,float b){float phase=strike(a);float angle=phase<.95f?-70:phase<1.1f?-70+160*(phase-.95f)/.15f:phase<1.25f?90:90-160*Math.min(1,(phase-1.25f)/.65f);c.save();c.translate(a,b-110);c.rotate(angle);p.setColor(Color.rgb(115,74,42));c.drawRoundRect(-5,-10,8,100,6,6,p);p.setColor(Color.rgb(236,88,75));c.drawRoundRect(-40,85,40,140,12,12,p);p.setColor(Color.rgb(255,187,176));for(int i=-25;i<=25;i+=16)for(int j=96;j<135;j+=14)c.drawCircle(i,j,4,p);c.restore();}
     void kiosk(Canvas c,float a,float b){p.setColor(Color.rgb(86,166,133));c.drawRoundRect(a-90,b,a+90,430,10,10,p);p.setColor(Color.rgb(255,209,72));c.drawRoundRect(a-112,b-32,a+112,b+8,18,18,p);p.setColor(Color.WHITE);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText("ЛИМОНАД · 10",a,b-6,p);p.setColor(Color.rgb(255,213,62));c.drawRect(a-48,b+40,a-3,b+105,p);p.setColor(Color.WHITE);c.drawCircle(a-26,b+50,11,p);}
     void hero(Canvas c,float a,float b){
       boolean air=y<ground-1;float t=System.currentTimeMillis()/1000f;
@@ -72,7 +87,7 @@ public class MainActivity extends Activity {
       buzz(air&&!dead&&!won&&hasWindowFocus());
       float step=!air&&Math.abs(vx)>0?(float)Math.sin(t*14)*12:0;
       float bob=air?0:Math.abs(step)*.22f;
-      c.save();c.translate(a,b-bob);
+      c.save();c.translate(a,b-bob);if(idle>3)c.rotate((float)Math.sin(clock*1.5f)*3,0,-30);
       // Two human-like legs and chunky shoes, alternating as he walks.
       p.setStrokeWidth(11);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(Color.rgb(42,48,61));
       c.drawLine(-18,-25,-20+step,13-(air?12:0),p);c.drawLine(18,-25,20-step,13-(air?12:0),p);
@@ -89,6 +104,8 @@ public class MainActivity extends Activity {
       p.setStrokeWidth(4);c.drawLine(-12,-140,-22,-157,p);c.drawLine(12,-140,24,-155,p);c.drawCircle(-23,-158,4,p);c.drawCircle(25,-156,4,p);
       p.setColor(Color.rgb(255,237,178));c.drawCircle(-14,-117,14,p);c.drawCircle(14,-117,14,p);
       p.setColor(Color.rgb(30,42,55));c.drawCircle(-11,-117,5,p);c.drawCircle(17,-117,5,p);
+      if(clock%4.3f<.14f||idle>5&&clock%3<.8f){p.setColor(Color.rgb(91,102,106));c.drawRect(-28,-131,28,-113,p);p.setStrokeWidth(2);p.setColor(Color.rgb(36,45,54));c.drawLine(-24,-116,-4,-116,p);c.drawLine(4,-116,24,-116,p);}
+      p.setColor(Color.rgb(48,60,74));c.drawRoundRect(17,-58,39,-37,5,5,p);p.setColor(Color.rgb(158,170,178));p.setStrokeWidth(2);c.drawLine(19,-55,37,-55,p);
       p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(Color.rgb(234,249,255));c.drawCircle(-14,-117,16,p);c.drawCircle(14,-117,16,p);c.drawLine(-1,-117,1,-117,p);
       c.drawArc(-10,-106,12,-94,10,150,false,p);p.setStyle(Paint.Style.FILL);
       p.setColor(Color.rgb(229,57,58));c.drawRoundRect(-30,-96,30,-82,7,7,p);
@@ -98,6 +115,7 @@ public class MainActivity extends Activity {
     void button(Canvas c,float a,float b,float s,String z){a=z.equals("◀")?getWidth()*.09f:z.equals("▶")?getWidth()*.27f:getWidth()*.83f;b=getHeight()-110;s=Math.min(180,getWidth()*.16f);p.setColor(Color.argb(220,255,255,255));c.drawRoundRect(a-s/2,b-85,a+s/2,b+85,26,26,p);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(56);p.setColor(Color.rgb(52,96,97));c.drawText(z,a,b+18,p);}
     public boolean onTouchEvent(android.view.MotionEvent e){
       int action=e.getActionMasked();
+      if(action==MotionEvent.ACTION_DOWN&&e.getY()<85&&e.getX()>getWidth()*.55f){immortal=!immortal;invalidate();return true;}
       if((dead||won)&&action==MotionEvent.ACTION_DOWN){dead=won=false;left=right=jump=false;x=160;y=350;vy=vx=cam=0;last=0;coins=0;coinX.clear();for(int i=0;i<18;i++)coinX.add(340+i*108f);invalidate();return true;}
       left=right=false;
       if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_UP){invalidate();return true;}
